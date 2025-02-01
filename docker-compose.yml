@@ -110,7 +110,7 @@ services:
     networks: [ 'netgfx' ]
     environment:
       - NGROK_AUTHTOKEN=${NGROK_AUTHTOKEN}
-    command: [ "http", "80", "--domain=special-barely-boxer.ngrok-free.app" ]
+    command: [ "http", "5678", "--domain=special-barely-boxer.ngrok-free.app" ]
     depends_on:
       - n8n
       - flowise
