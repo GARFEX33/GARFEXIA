@@ -1,0 +1,105 @@
+version: '3.8'
+
+volumes:
+  n8n_storage:
+  postgres_storage:
+  qdrant_storage:
+  flowise:
+  nocodb_storage:
+
+
+networks:
+  netgfx:
+
+
+services:
+
+  postgres:
+    image: postgres:16-alpine
+    networks: [ 'netgfx' ]
+    restart: unless-stopped
+    ports:
+      - 5432:5432
+    environment:
+      - POSTGRES_USER=${POSTGRES_USER}
+      - POSTGRES_PASSWORD=${POSTGRES_PASSWORD}
+      - POSTGRES_DB=${POSTGRES_DB}
+    volumes:
+      - postgres_storage:/var/lib/postgresql/data
+    healthcheck:
+      test: [ 'CMD-SHELL', 'pg_isready -h localhost -U ${POSTGRES_USER} -d ${POSTGRES_DB}' ]
+      interval: 5s
+      timeout: 5s
+      retries: 10
+
+  qdrant:
+    image: qdrant/qdrant
+    container_name: qdrant
+    networks: [ 'netgfx' ]
+    restart: unless-stopped
+    ports:
+      - 6333:6333
+    volumes:
+      - qdrant_storage:/qdrant/storage
+    healthcheck:
+      test: [ "CMD", "curl", "-f", "http://localhost:6333" ]
+      interval: 5s
+      timeout: 3s
+      retries: 5
+
+  n8n:
+    image: n8nio/n8n:latest
+    container_name: n8n
+    networks: [ 'netgfx' ]
+    restart: unless-stopped
+    ports:
+      - 5678:5678
+    environment:
+      - DB_TYPE=postgresdb
+      - DB_POSTGRESDB_HOST=postgres
+      - DB_POSTGRESDB_USER=${POSTGRES_USER}
+      - DB_POSTGRESDB_PASSWORD=${POSTGRES_PASSWORD}
+      - N8N_DIAGNOSTICS_ENABLED=false
+      - N8N_PERSONALIZATION_ENABLED=false
+      - N8N_ENCRYPTION_KEY=${N8N_ENCRYPTION_KEY}
+      - N8N_USER_MANAGEMENT_JWT_SECRET=${N8N_USER_MANAGEMENT_JWT_SECRET}
+      - WEBHOOK_URL=${N8N_WEBHOOK_URL}
+    volumes:
+      - n8n_storage:/home/node/.n8n
+      - ./n8n/backup:/backup
+      - ./shared:/data/shared
+    depends_on:
+      postgres:
+        condition: service_healthy
+
+  flowise:
+    image: flowiseai/flowise
+    networks: [ 'netgfx' ]
+    restart: unless-stopped
+    container_name: flowise
+    environment:
+      - PORT=3001
+    ports:
+      - 3001:3001
+    extra_hosts:
+      - "host.docker.internal:host-gateway"
+    volumes:
+      - ~/.flowise:/root/.flowise
+    entrypoint: /bin/sh -c "sleep 3; flowise start"
+  nocodb:
+    image: nocodb/nocodb:latest
+    container_name: nocodb
+    networks: [ 'netgfx' ]
+    restart: unless-stopped
+    ports:
+      - 8080:8080
+    environment:
+      - NC_DB=pg://host.docker.internal:5432?u=${POSTGRES_USER}&p=${POSTGRES_PASSWORD}&d=${POSTGRES_DB}
+      - NC_PORT=8080
+      - NC_PUBLIC_URL=http://localhost:8080
+      - NC_AUTH_JWT_SECRET=${NC_AUTH_JWT_SECRET}
+    volumes:
+      - nocodb_storage:/usr/app/data
+    depends_on:
+      postgres:
+        condition: service_healthy
