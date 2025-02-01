@@ -103,3 +103,15 @@ services:
     depends_on:
       postgres:
         condition: service_healthy
+  ngrok:
+    image: ngrok/ngrok
+    container_name: ngrok
+    restart: unless-stopped
+    networks: [ 'netgfx' ]
+    environment:
+      - NGROK_AUTHTOKEN=${NGROK_AUTHTOKEN}
+    command: [ "http", "80", "--domain=special-barely-boxer.ngrok-free.app" ]
+    depends_on:
+      - n8n
+      - flowise
+      - nocodb
